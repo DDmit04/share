@@ -3,9 +3,6 @@ import pathlib
 
 import pandas as pd
 
-from utills import CleanBearingData
-
-
 def merge_excel_files(input_dir, output_file, id_name: str):
     xlsx_files = [
         f for f in os.listdir(input_dir)
@@ -41,15 +38,15 @@ def merge_excel_files(input_dir, output_file, id_name: str):
 
 if __name__ == "__main__":
 
-    curr_version = 'v4'
-    for folder in ['1', '2', '3', '4']:
-        input_directory = f"C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\data\\{curr_version}\\processed\\{folder}"
+    curr_version = 'v5'
+    for folder in ['arpik.ru']:
+        input_directory = f"C:\\Users\\ddpc-win\\PycharmProjects\\share\\data\\{curr_version}\\processed\\{folder}"
         if os.path.exists(input_directory):
             output_filename = f"./data/{curr_version}/{folder}/processed.xlsx"
             os.makedirs(pathlib.Path(output_filename).parent, exist_ok=True)
             merge_excel_files(input_directory, output_filename, 'no')
 
-        input_directory = f"C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\data\\{curr_version}\\unprocessed\\{folder}"
+        input_directory = f"C:\\Users\\ddpc-win\\PycharmProjects\\share\\data\\{curr_version}\\unprocessed\\{folder}"
         if os.path.exists(input_directory):
             output_filename = f"./data/{curr_version}/{folder}/unprocessed.xlsx"
             os.makedirs(pathlib.Path(output_filename).parent, exist_ok=True)
