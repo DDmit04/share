@@ -1,5 +1,7 @@
 from typing import TypedDict, Any
 
+from charset_normalizer import from_bytes
+
 class DirtyBearingData(TypedDict):
     No_: str
     Description: str
@@ -40,10 +42,28 @@ def to_float(num: str) -> float:
         return 0.0
 
 
-def decode_page(raw_bytes: bytes):
-    detection = chardet.detect(raw_bytes)
-    correct_encoding = detection['encoding']
-    return raw_bytes.decode(correct_encoding, errors='replace')
+def decode_page(raw_bytes: bytes) -> str:
+    """Декодирует тело страницы в строку, подбирая кодировку.
+
+    Раньше здесь вызывался `chardet`, который не был ни импортирован, ни
+    установлен, поэтому любой вызов падал с `NameError: name 'chardet' is not
+    defined`. Теперь используется `charset-normalizer` — зависимость `requests`,
+    уже указанная в requirements.
+    """
+    if not raw_bytes:
+        return ""
+    try:
+        best = from_bytes(raw_bytes).best()
+    except Exception:  # noqa: BLE001 — детектор не должен ронять скрапинг
+        best = None
+    if best is not None:
+        return str(best)  # у CharsetMatch str() — уже декодированный текст
+    for encoding in ("utf-8", "cp1251"):
+        try:
+            return raw_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw_bytes.decode("utf-8", errors="replace")
 
 
 def to_str(value: Any) -> str | None:

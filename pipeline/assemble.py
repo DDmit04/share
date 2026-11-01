@@ -1,5 +1,11 @@
 """Сборка итоговых processed.xlsx / unprocessed.xlsx из чекпоинтов всех площадок.
 
+Сначала запись должна пройти «годность»: у неё есть хотя бы одна ненулевая
+характеристика d/D/B. Записи, у которых все три размера пустые/нулевые,
+отбрасываются ещё при чтении чекпоинтов (`has_dimensions`), поэтому в
+`processed.xlsx` они не попадают никогда — даже со сходством 1.0 — и не
+мешают выбрать нормальную запись того же `No_` с другой площадки.
+
 Правило выбора одной записи среди всех найденных для одного и того же подшипника:
 
 1. максимум итоговых очков: `bearing_similarity(source_name, description)`
@@ -9,7 +15,7 @@
 
 Порог `SIMILARITY_THRESHOLD = 0.85` применяется к сходству, а не к очкам:
 штраф за нули влияет только на выбор победителя и не отправляет найденную
-запись в unprocessed.
+запись в unprocessed (полный отказ — только когда все три размера нулевые).
 
 `no` в чекпоинтах — всегда строка (как `No_` во входном xlsx).
 """
@@ -69,6 +75,16 @@ def _is_zero(value) -> bool:
     return number == 0.0 or number != number  # NaN != NaN
 
 
+def has_dimensions(record: dict) -> bool:
+    """Есть ли у записи хотя бы одна ненулевая характеристика d/D/B.
+
+    Запись, у которой все три размера пустые/нулевые, бесполезна: подшипник по
+    ней не определить. Такая запись не должна попасть в processed и не должна
+    вытеснять нормальную запись того же `No_` при выборе победителя.
+    """
+    return any(not _is_zero(record.get(key)) for key in DIMENSIONS)
+
+
 def candidate_points(record: dict) -> float:
     """Итоговые очки: сходство минус штраф за каждую нулевую характеристику."""
     similarity = float(record.get("bearing_similarity") or 0.0)
@@ -88,9 +104,17 @@ def _candidate_score(record: dict) -> tuple[float, int, int, float]:
     )
 
 
-def load_candidates(raw_dir: str | Path) -> dict[str, dict]:
-    """Читает все *.jsonl из raw_dir и оставляет лучшую запись на каждый no."""
+def load_candidates(raw_dir: str | Path) -> tuple[dict[str, dict], int]:
+    """Читает все *.jsonl из raw_dir и оставляет лучшую запись на каждый no.
+
+    Записи без единой характеристики (все d/D/B нулевые) отбрасываются до
+    выбора победителя: иначе такая запись с высоким сходством могла бы
+    «затенить» нормальную запись того же `No_` с другого сайта.
+
+    Возвращает `(кандидаты, сколько записей отброшено без размеров)`.
+    """
     candidates: dict[str, dict] = {}
+    skipped_no_dimensions = 0
     for path in sorted(Path(raw_dir).glob("*.jsonl")):
         site = path.stem
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -107,6 +131,10 @@ def load_candidates(raw_dir: str | Path) -> dict[str, dict]:
             record["no"] = str(record.get("no", ""))
             if not record["no"]:
                 continue
+            if not has_dimensions(record):
+                # все d/D/B нулевые — запись ничего не даёт, отбрасываем
+                skipped_no_dimensions += 1
+                continue
 
             source_name = record.get("source_name") or ""
             description = record.get("description") or ""
@@ -117,7 +145,7 @@ def load_candidates(raw_dir: str | Path) -> dict[str, dict]:
             current = candidates.get(record["no"])
             if current is None or _candidate_score(record) > _candidate_score(current):
                 candidates[record["no"]] = record
-    return candidates
+    return candidates, skipped_no_dimensions
 
 
 def assemble(
@@ -127,12 +155,17 @@ def assemble(
 ) -> dict:
     """Собирает два итоговых файла и возвращает статистику."""
     df = read_input(input_path)
-    candidates = load_candidates(raw_dir)
+    candidates, rejected_no_dimensions = load_candidates(raw_dir)
 
     accepted: dict[str, dict] = {}
     rejected_low_similarity = 0
     for no, record in candidates.items():
-        if record["bearing_similarity"] >= SIMILARITY_THRESHOLD:
+        # Записи без размеров уже отфильтрованы в load_candidates; проверка
+        # оставлена как страховка, чтобы такая запись не попала в processed
+        # ни при каких изменениях ниже.
+        if not has_dimensions(record):
+            rejected_no_dimensions += 1
+        elif record["bearing_similarity"] >= SIMILARITY_THRESHOLD:
             accepted[no] = record
         else:
             rejected_low_similarity += 1
@@ -159,6 +192,7 @@ def assemble(
         "candidates": len(candidates),
         "processed": int(len(processed.index)),
         "rejected_low_similarity": rejected_low_similarity,
+        "rejected_no_dimensions": rejected_no_dimensions,
         "unprocessed": int(len(unprocessed.index)),
         "processed_path": str(processed_path),
         "unprocessed_path": str(unprocessed_path),

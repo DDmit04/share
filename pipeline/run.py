@@ -184,7 +184,8 @@ def run_site(
         "skipped": skipped,
         "found": found,
         "no_variants": no_variants,
-        "errors": scrape_errors,
+        # плюс ошибки, которые скрапер проглотил внутри себя (запрос/разбор страницы)
+        "errors": scrape_errors + getattr(scraper, "errors", 0),
         "stopped": stop is not None and stop.is_set() and scanned < goal,
         "seconds": time.time() - started,
     }
@@ -326,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         if futures:
             where = f"; логи площадок: {logs_dir}" if quiet else ""
             _log(f"Площадок: {len(futures)}, одновременно {workers}{where}")
+        reported: set[Future] = set()
         try:
             # Ждём короткими шагами: блокирующее ожидание «до первой готовой»
             # не прерывается сигналом, и Ctrl+C откладывался бы до конца
@@ -334,6 +336,7 @@ def main(argv: list[str] | None = None) -> int:
             while pending:
                 finished, pending = wait(pending, timeout=0.5, return_when=FIRST_COMPLETED)
                 for future in finished:
+                    reported.add(future)
                     _report(futures[future], future, board)
         except KeyboardInterrupt:
             interrupted = True
@@ -349,7 +352,18 @@ def main(argv: list[str] | None = None) -> int:
             # иначе assemble читал бы файлы, которые ещё пишутся.
             try:
                 pool.shutdown(wait=True)
+            except KeyboardInterrupt:
+                # Второй Ctrl+C. Ждать площадки всё равно придётся (join не
+                # прерывается), но терять уже собранное из-за этого не нужно:
+                # потоки к этому моменту уже остановились, дальше — сборка.
+                _log("Повторный Ctrl+C: площадки уже остановлены, дособираю итоги.")
             finally:
+                # После Ctrl+C прерванные площадки тоже должны показать свой итог:
+                # сколько успели просканировать и найти.
+                for future, name in futures.items():
+                    if future in reported or future.cancelled() or not future.done():
+                        continue
+                    _report(name, future, board)
                 if board is not None:
                     board.stop()
                 _console.close()
@@ -363,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  обработано строк:       {stats['input_rows']}")
     print(f"  найдено кандидатов:     {stats['candidates']}")
     print(f"  отброшено по сходству:  {stats['rejected_low_similarity']}")
+    print(f"  без размеров (d/D/B=0): {stats['rejected_no_dimensions']}")
     print(f"  processed:              {stats['processed']}  -> {stats['processed_path']}")
     print(f"  unprocessed:            {stats['unprocessed']}  -> {stats['unprocessed_path']}")
     if logs_used:

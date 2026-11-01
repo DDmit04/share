@@ -5,7 +5,7 @@
     python -m pipeline.test_scoring
 """
 
-from pipeline.assemble import ZERO_PENALTY, _candidate_score, candidate_points
+from pipeline.assemble import ZERO_PENALTY, _candidate_score, candidate_points, has_dimensions
 
 
 def record(similarity: float, internal: float = 0, external: float = 0, width: float = 0) -> dict:
@@ -42,6 +42,24 @@ def main() -> int:
         (
             "при равных очках выигрывает запись с большим числом размеров",
             _candidate_score(full) > _candidate_score(record(0.95, 0, 52, 15)),
+        ),
+        (
+            "все три размера нулевые — запись негодная, даже при сходстве 1.0",
+            not has_dimensions(record(1.0, 0, 0, 0)),
+        ),
+        (
+            "одного ненулевого размера достаточно, чтобы запись была годной",
+            has_dimensions(record(0.5, 0, 0, 15)),
+        ),
+        (
+            "NaN и None считаются нулями при проверке годности",
+            not has_dimensions(record(0.99, float("nan"), float("nan"), float("nan")))
+            and not has_dimensions({"bearing_similarity": 0.99, "internal_d": None,
+                                    "external_d": None, "width": None}),
+        ),
+        (
+            "отсутствующие поля размеров — тоже нули",
+            not has_dimensions({"bearing_similarity": 0.99}),
         ),
     ]
 

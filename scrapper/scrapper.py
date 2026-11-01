@@ -22,6 +22,8 @@ class Scrapper(ABC):
         }
         self.name = name
         self.log = logging.getLogger(name)
+        #: Сколько ошибок скрапинга проглочено (они пишутся в лог, но строку не роняют).
+        self.errors = 0
 
     def scrap_dirty_xlsx(
             self,
@@ -86,7 +88,8 @@ class Scrapper(ABC):
                 if res is not None:
                     return res
             except Exception as e:
-                self.log.error(f'Ошибка исполнения - {new_bearing["description"]}, e - {e}')
+                self.errors += 1
+                self.log.error(f'[{self.name}] ошибка исполнения - {new_bearing["description"]}, e - {e}')
 
         return None
 
