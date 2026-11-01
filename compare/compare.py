@@ -31,6 +31,9 @@ BRANDS = {
     'AGCO', 'Amazone', 'CNH', 'Kuhn', 'Geringhoff', 'Krone'
 }
 
+#: Минимальное сходство, при котором найденная запись считается рабочим результатом.
+SIMILARITY_THRESHOLD = 0.85
+
 RUS_DESC_WORDS = [
     'подшипник', 'роликовый', 'радиальный', 'шариковый', 'упорный',
     'линейный', 'сферический', 'конический', 'игольчатый', 'шарнирный',
@@ -129,6 +132,19 @@ def extract_primary_number(code: str) -> str | None:
     return None
 
 
+def normalize_number(num: str | None) -> str | None:
+    """Приводит номер к каноническому виду, убирая ведущие нули.
+
+    «06205» и «6205» — один и тот же подшипник, поэтому сравнивать
+    их нужно по нормализованному номеру, а не по исходным строкам.
+    Если номер состоит только из нулей, возвращается как есть.
+    """
+    if not num:
+        return num
+    stripped = num.lstrip('0')
+    return stripped or num
+
+
 
 def remove_bearing_type(text: str) -> str:
     i = 0
@@ -155,11 +171,25 @@ def levenshtein_norm(a: str, b: str):
     return 1.0 - dp[m][n] / max(m, n)
 
 
+def strip_non_english_letters(text: Any) -> str:
+    """Удаляет из строки все буквы, кроме английских (A-Z, a-z).
+
+    Цифры и разделители (дефис, точка, пробел и т.п.) сохраняются —
+    они нужны для сравнения номеров подшипников. None и NaN дают ''.
+    """
+    if text is None or pd.isna(text):
+        return ''
+    return ''.join(ch for ch in str(text) if not (ch.isalpha() and not ch.isascii()))
+
+
 def bearing_similarity(desc, src) -> float:
     """Сравнивает два описания подшипников.
-    Возвращает (сходство, вердикт)."""
-    desc = remove_bearing_type(desc)
-    src = remove_bearing_type(src)
+
+    Перед разбором из обоих аргументов удаляются все неанглийские буквы
+    (кириллица и прочие алфавиты), после чего сравниваются извлечённые
+    коды. Возвращает нормированное сходство от 0.0 до 1.0."""
+    desc = remove_bearing_type(strip_non_english_letters(desc))
+    src = remove_bearing_type(strip_non_english_letters(src))
 
     codes1 = extract_bearing_codes(desc)
     codes2 = extract_bearing_codes(src)
@@ -170,8 +200,8 @@ def bearing_similarity(desc, src) -> float:
     for c1 in codes1:
         for c2 in codes2:
             full_sim = levenshtein_norm(c1, c2)
-            num1 = extract_primary_number(c1)
-            num2 = extract_primary_number(c2)
+            num1 = normalize_number(extract_primary_number(c1))
+            num2 = normalize_number(extract_primary_number(c2))
 
             if num1 and num2:
                 if num1 == num2:

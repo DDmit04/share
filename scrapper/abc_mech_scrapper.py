@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup, Tag
 
-from compare.compare import bearing_similarity
+from compare.compare import SIMILARITY_THRESHOLD, bearing_similarity
 from scrapper.scrapper import Scrapper
 from utills import CleanBearingData
 
@@ -38,7 +38,7 @@ class AbcMechScrapper(Scrapper):
                 bearing['width'] = float(width.text)
 
                 sim = bearing_similarity( bearing['source_name'], bearing['description'])
-                if sim >= 0.85:
+                if sim >= SIMILARITY_THRESHOLD:
                     return bearing
                 else:
                     print(f'Не подходит по имени: искомое - {bearing['description']}, полученное - {bearing['source_name']}')

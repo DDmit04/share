@@ -1,9 +1,12 @@
 import os
-import pathlib
 
 import pandas as pd
 
-from utills import CleanBearingData
+from scrapper.abc_mech_scrapper import AbcMechScrapper
+from scrapper.arpik_scrapper import ArpikScrapper
+from scrapper.podgipnik_inform_scrapper import PodshipnikInformScrapper
+from scrapper.podshipnik_ru_scrapper import PodshipnikRuScrapper
+from scrapper.spec_prom_scrapper import SpecPromScrapper
 
 
 def merge_results(filepaths: list[str], output_file, id_name: str):
@@ -18,7 +21,7 @@ def merge_results(filepaths: list[str], output_file, id_name: str):
             df = pd.read_excel(filepath)
             if len(df.index) > 0:
                 for i, row in df.iterrows():
-                    if row[id_name] in _map:
+                    if row[id_name] in _map and id_name == 'No_':
                         continue
                     else:
                         rows.append(row)
@@ -34,10 +37,19 @@ def merge_results(filepaths: list[str], output_file, id_name: str):
 
 if __name__ == "__main__":
 
-    curr_version = 'v4'
+    scrappers = [
+        SpecPromScrapper(),
+        PodshipnikRuScrapper(),
+        PodshipnikInformScrapper(),
+        AbcMechScrapper(),
+        ArpikScrapper()
+    ]
+
+    curr_version = 'v6'
     processed_files = []
     unprocessed_files = []
-    for folder in ['1', '2', '3', '4']:
+    for scrapper in scrappers:
+        folder = scrapper.name
         base_path = f"C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\merge\\data\\{curr_version}\\{folder}"
         filepath = f"{base_path}\\processed.xlsx"
         if os.path.exists(filepath):

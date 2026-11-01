@@ -2,7 +2,7 @@ import os
 
 import pandas as pd
 
-from scrapper.podgipnik_ru_scrapper import PodshipnikRuScrapper
+from scrapper.podshipnik_ru_scrapper import PodshipnikRuScrapper
 
 file_path = 'C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\data\\v4\\unprocessed.xlsx'
 batch_size = 500

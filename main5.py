@@ -4,7 +4,7 @@ import pandas as pd
 
 from scrapper.abc_mech_scrapper import AbcMechScrapper
 from scrapper.podgipnik_inform_scrapper import PodshipnikInformScrapper
-from scrapper.podgipnik_ru_scrapper import PodshipnikRuScrapper
+from scrapper.podshipnik_ru_scrapper import PodshipnikRuScrapper
 from scrapper.arpik_scrapper import ArpikScrapper
 
 file_path = 'C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\data\\v5\\unprocessed.xlsx'

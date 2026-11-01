@@ -7,7 +7,7 @@ import pandas as pd
 from scrapper.abc_mech_scrapper import AbcMechScrapper
 from scrapper.arpik_scrapper import ArpikScrapper
 from scrapper.podgipnik_inform_scrapper import PodshipnikInformScrapper
-from scrapper.podgipnik_ru_scrapper import PodshipnikRuScrapper
+from scrapper.podshipnik_ru_scrapper import PodshipnikRuScrapper
 from scrapper.scrapper import Scrapper
 from scrapper.spec_prom_scrapper import SpecPromScrapper
 
@@ -31,15 +31,17 @@ file_path = 'C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\data\\v4\\unproces
 batch_size = 500
 
 scrappers_list = {
-    SpecPromScrapper(),
-    PodshipnikRuScrapper(),
-    PodshipnikInformScrapper(),
-    AbcMechScrapper(),
-    ArpikScrapper()
+    # SpecPromScrapper(),
+    # PodshipnikRuScrapper(),
+    # PodshipnikInformScrapper(),
+    # AbcMechScrapper(),
+    # ArpikScrapper(),
+PodshipnikRuScrapper()
 }
 tasks = []
+version = 'v6'
 for scrapper in scrappers_list:
-    task = threading.Thread(target=process_scrapper, args=(scrapper, 'v5',))
+    task = threading.Thread(target=process_scrapper, args=(scrapper, version,))
     task.start()
     tasks.append(task)
 

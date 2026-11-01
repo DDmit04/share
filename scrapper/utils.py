@@ -3,7 +3,7 @@ import re
 import regex
 from pandas import Series
 
-from utills import CleanBearingData, DirtyBearingData
+from utills import CleanBearingData, DirtyBearingData, ResBearingData
 
 
 def split_description(description: str) -> tuple[list[str], list[str]]:
@@ -61,4 +61,16 @@ def from_dirty_bearing(row: DirtyBearingData) -> CleanBearingData:
         source_name='',
         source_link='',
         bearing_similarity=0.0
+    )
+
+def res_from_clean_bearing(bearing: CleanBearingData) -> ResBearingData:
+    return ResBearingData(
+        no=bearing['no'],
+        description=bearing['description'],
+        type=bearing['type'],
+        internal_d=bearing['internal_d'],
+        external_d=bearing['external_d'],
+        width=bearing['width'],
+        source_name=bearing['source_name'],
+        source_link=bearing['source_link'],
     )

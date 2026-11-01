@@ -1,25 +1,21 @@
 import os
-import pathlib
 
 import pandas as pd
 
 from compare.compare import bearing_similarity
 from scrapper.utils import from_clean_bearing
-from utills import CleanBearingData
 
 
-def merge_copyes(filepath: str, output_file):
+def merge_copy(filepath: str, output_file: str):
     if not filepath:
         return
-    print(f"Файлов: {len(filepath)}")
 
     _map = {}
-    rows = []
     try:
         df = pd.read_excel(filepath)
         if len(df.index) > 0:
             for i, row in df.iterrows():
-                _id = row['no']
+                _id = str(row['no'])
                 if _id in _map:
                     prev_value = from_clean_bearing(_map[_id])
                     row_clean = from_clean_bearing(row)
@@ -32,13 +28,14 @@ def merge_copyes(filepath: str, output_file):
                     if row_score > prev_score:
                         _map[_id] = row_clean
                     else:
-                        _map[_id] = prev_score
+                        _map[_id] = prev_value
                 else:
-                    rows.append(row)
                     _map[_id] = row
     except Exception as e:
         print(f"Ошибка при обработке файла {filepath}: {e}")
+        raise e
 
+    rows = list(_map.values())
     print(f'Строк: {len(rows)}')
     df = pd.DataFrame(rows)
     df.to_excel(output_file, index=False)
@@ -47,22 +44,10 @@ def merge_copyes(filepath: str, output_file):
 
 if __name__ == "__main__":
 
-    curr_version = 'v4'
+    curr_version = 'v6'
     processed_files = []
-    unprocessed_files = []
-    for folder in ['1', '2', '3', '4']:
-        base_path = f"C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\merge\\data\\{curr_version}\\{folder}"
-        filepath = f"{base_path}\\processed.xlsx"
-        if os.path.exists(filepath):
-            processed_files.append(filepath)
+    base_path = f"C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\merge\\data\\{curr_version}"
+    filepath = f"{base_path}\\processed.xlsx"
+    output_filepath = f"{base_path}\\processed_no_copy.xlsx"
 
-        filepath = f"{base_path}\\unprocessed.xlsx"
-        if os.path.exists(filepath):
-            unprocessed_files.append(filepath)
-
-    res_folder = f'C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\merge\\data\\{curr_version}'
-    processed_filepath = f'{res_folder}\\processed.xlsx'
-    unprocessed_filepath = f'{res_folder}\\unprocessed.xlsx'
-
-    merge_copyes(processed_files, output_file=processed_filepath, id_name='no')
-    merge_copyes(unprocessed_files, output_file=unprocessed_filepath, id_name='No_')
+    merge_copy(filepath, output_filepath)

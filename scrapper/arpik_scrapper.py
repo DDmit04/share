@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup, Tag
 
-from compare.compare import bearing_similarity
+from compare.compare import SIMILARITY_THRESHOLD, bearing_similarity
 from scrapper.scrapper import Scrapper
 from utills import CleanBearingData, to_str
 
@@ -52,7 +52,7 @@ class ArpikScrapper(Scrapper):
                     sim = bearing_similarity(name, bearing['description'])
                     bearing['source_link'] = self.host + bearing_url
                     bearing['source_name'] = name
-                    if sim >= 0.85:
+                    if sim >= SIMILARITY_THRESHOLD:
                         return self.scrap_bearing_data(
                             bearing=bearing,
                             url=self.host + bearing_url,

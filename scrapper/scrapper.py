@@ -6,6 +6,7 @@ import pandas as pd
 from bs4 import Tag
 
 from compare.name_gen import get_name_variants
+from scrapper.net import configure_proxies
 from scrapper.utils import from_clean_bearing, from_dirty_bearing, dirty_from_row
 from utills import CleanBearingData, DirtyBearingData
 
@@ -13,6 +14,7 @@ from utills import CleanBearingData, DirtyBearingData
 class Scrapper(ABC):
 
     def __init__(self, url: str, host: str, name: str):
+        configure_proxies()
         self.host = host
         self.url = url
         self.headers = {

@@ -6,7 +6,7 @@ import pandas as pd
 from scrapper.abc_mech_scrapper import AbcMechScrapper
 from scrapper.arpik_scrapper import ArpikScrapper
 from scrapper.podgipnik_inform_scrapper import PodshipnikInformScrapper
-from scrapper.podgipnik_ru_scrapper import PodshipnikRuScrapper
+from scrapper.podshipnik_ru_scrapper import PodshipnikRuScrapper
 from scrapper.spec_prom_scrapper import SpecPromScrapper
 
 version = 'v6'

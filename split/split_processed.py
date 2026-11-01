@@ -17,10 +17,12 @@ def split_unprocessed(processed_filepath: str, unprocessed_filepath: str):
     return res
 
 if __name__ == '__main__':
-    processed_path = 'C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\data\\v5\\processed.xlsx'
+    version = 'v6'
+    base_path = f'C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\data\\{version}'
+    processed_path = f'{base_path}\\processed.xlsx'
     unprocessed_path = 'C:\\Users\\d.dmitrochenkov\\workspace\\scrapper\\data.xlsx'
 
     unreprocessed = split_unprocessed(processed_path, unprocessed_path)
 
     df = pd.DataFrame(unreprocessed)
-    df.to_excel(f'./unreprocessed.xlsx', sheet_name='processed', index=False)
+    df.to_excel(f'{base_path}\\unreprocessed.xlsx', sheet_name='processed', index=False)
