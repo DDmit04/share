@@ -1,13 +1,13 @@
 import requests
 from bs4 import BeautifulSoup, Tag
 
-from compare.compare import SIMILARITY_THRESHOLD, bearing_similarity
+from utils.compare import SIMILARITY_THRESHOLD
 from scrapper.chains.chain_scrapper import ChainScrapper
-from scrapper.chains.model import ChainData
-from scrapper.utils import to_str, to_float
+from scrapper.chains.data.chain_model import ChainData
+from utils.strings import decode_page, to_str, to_float
 
 
-class EuromehanikaScrapper(ChainScrapper):
+class AksdekomScrapper(ChainScrapper):
 
     def __init__(self):
         super().__init__(
@@ -19,10 +19,17 @@ class EuromehanikaScrapper(ChainScrapper):
     def scrap_data(self, entity_data: ChainData, url: str) -> ChainData | None:
         print(f'Переход по URL: {url}')
         response = requests.get(url, headers=self.headers, verify=False)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # response.text декодировал бы тело как ISO-8859-1 (если сервер не прислал
+        # charset в заголовке) и русский текст превращался бы в «кракозябры».
+        # Названия параметров сравниваются по кириллице, поэтому без этого
+        # сравнение не срабатывало и поля оставались пустыми.
+        html = decode_page(response.content)
+        soup = BeautifulSoup(html, 'html.parser')
         table = soup.find('div', {'class': 'row option'})
         if table is not None:
-            rows = soup.find_all('div:not(.hidden)')
+            rows = table.select('div:not(.hidden)')
+            rows = [r for r in rows if r.find(True)]
+
             for i in range(0, len(rows), 2):
                 title_col = rows[i].find('span')
                 if not title_col:
@@ -46,20 +53,21 @@ class EuromehanikaScrapper(ChainScrapper):
 
         return None
 
-    def scrap_list(self, entity_data: ChainData, bearing_list: Tag) -> ChainData | None:
-        bearing_list_items = bearing_list.find_all('a')
-        for item in bearing_list_items:
-            bearing_url = to_str(item.attrs.get('href'))
+    def scrap_list(self, entity_data: ChainData, found: Tag) -> ChainData | None:
+        items = found.find_all('a')
+        for item in items:
+            item_url = to_str(item.attrs.get('href'))
             title = item.find('h5')
-            if title and bearing_url:
+            if title and item_url:
                 name = title.get_text().strip()
-                sim = bearing_similarity(name, entity_data['link'])
-                entity_data['source_link'] = self.host + bearing_url
+                sim = self.mapper.name_similarity(name, entity_data)
+                entity_data['source_link'] = self.host + item_url
                 entity_data['source_name'] = name
+                entity_data['name_similarity'] = round(float(sim), 4)
                 if sim >= SIMILARITY_THRESHOLD:
                     new_clean = self.scrap_data(
                         entity_data=entity_data,
-                        url=self.host + bearing_url,
+                        url=self.host + item_url,
                     )
                     if new_clean is not None:
                         return new_clean
@@ -70,12 +78,12 @@ class EuromehanikaScrapper(ChainScrapper):
     def scrap_by_url(self, entity_data: ChainData, url: str) -> ChainData | None:
         response = requests.get(url, headers=self.headers, verify=False)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            bearing_list = soup.find('div', {'class': "search"})
-            if bearing_list is not None:
+            soup = BeautifulSoup(decode_page(response.content), 'html.parser')
+            found = soup.find('div', {'class': "search"})
+            if found is not None:
                 return self.scrap_list(
                     entity_data=entity_data,
-                    bearing_list=bearing_list,
+                    found=found,
                 )
             else:
                 print('Не найдено')

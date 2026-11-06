@@ -13,7 +13,7 @@
     results/raw/<site>.jsonl   — чекпоинт площадки (дописывается построчно,
                                  поэтому Ctrl+C и повторный запуск не теряют прогресс);
     results/logs/<site>.log    — весь вывод скрапера площадки (в тихом режиме);
-    results/processed.xlsx     — по одной лучшей записи на подшипник;
+    results/processed.xlsx     — по одной лучшей записи на цепь;
     results/unprocessed.xlsx   — исходные строки, для которых ничего не принято.
 
 Площадки сканируются параллельно: каждая в своём потоке, со своим экземпляром
@@ -46,9 +46,9 @@ import pandas as pd
 from pipeline import progress
 from pipeline.assemble import assemble, read_input
 from pipeline.registry import SITES, resolve_sites
-from scrapper.chains.mapper import ChainScrapperMapper
-from scrapper.chains.model import ChainData
-from scrapper.model import get_name_variants
+from scrapper.chains.data.chain_mapper import ChainScrapperMapper
+from scrapper.chains.data.chain_model import ChainData
+from scrapper.scrapper_mapper import ScrapperMapper
 
 #: Пишет в консоль, пока идёт скрапинг; None — обычный print.
 _console: progress.Console | None = None
@@ -62,7 +62,11 @@ def _log(message: str, *, error: bool = False) -> None:
 
 
 def _load_done(path: Path) -> set[str]:
-    """Номера, которые уже успешно обработаны в этом чекпоинте."""
+    """Номера, которые уже успешно обработаны в этом чекпоинте.
+
+    Ключ — `ChainData['id']` (колонка «Номер материала»), отдельного поля `no`
+    в записи нет: оно дублировало бы `id`.
+    """
     done: set[str] = set()
     if not path.exists():
         return done
@@ -71,21 +75,21 @@ def _load_done(path: Path) -> set[str]:
         if not line:
             continue
         try:
-            done.add(str(json.loads(line).get("no", "")))
+            done.add(str(json.loads(line).get("id", "")))
         except json.JSONDecodeError:
             # недописанная строка после аварийного завершения — просто перезапишем
             continue
     return done
 
 
-def prepare_inputs(df: pd.DataFrame) -> list[ChainData]:
+def prepare_inputs(df: pd.DataFrame, mapper: ScrapperMapper) -> list[ChainData]:
     """Материализует входные строки в главном потоке.
 
     Потоки не должны делить DataFrame: `iterrows()` в pandas правит внутренние
     ссылки менеджера блоков. Один раз разбираем xlsx здесь — дальше потоки
     читают только неизменяемый список.
     """
-    return [ChainScrapperMapper().from_row(row) for _, row in df.iterrows()]
+    return [mapper.from_row(row) for _, row in df.iterrows()]
 
 
 def run_site(
@@ -142,14 +146,9 @@ def run_site(
                     board.update(name, scanned=scanned, found=found, skipped=skipped)
                 elif scanned % 25 == 0:
                     _log(f"[{name}] {scanned}/{total}, найдено {found}")
-                no = str(chain['id'])
-                if no in done:
+                record_id = str(chain['id'])
+                if record_id in done:
                     skipped += 1
-                    continue
-
-                if not get_name_variants(chain):
-                    # нет вариантов поиска в мэппинге — искать нечего, строка уйдёт в unprocessed
-                    no_variants += 1
                     continue
 
                 try:
@@ -158,14 +157,14 @@ def run_site(
                     scrape_errors += 1
                     if log_handle is not None:
                         # печать в этом потоке уходит в лог площадки, а не в консоль
-                        print(f"[{name}] {no}: ошибка скрапинга: {exc}")
+                        print(f"[{name}] {record_id}: ошибка скрапинга: {exc}")
                     else:
-                        _log(f"[{name}] {no}: ошибка скрапинга: {exc}", error=True)
+                        _log(f"[{name}] {record_id}: ошибка скрапинга: {exc}", error=True)
                     result = None
 
                 if result:
                     record = dict(result)
-                    record["no"] = no
+                    # ключ записи — `id` из ChainData, отдельное поле `no` не пишем
                     record["site"] = name
                     handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
                     handle.flush()
@@ -228,7 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m pipeline.run",
         description="Скрапинг нескольких площадок и сборка processed/unprocessed.",
     )
-    parser.add_argument("--input", default="data.xlsx", help="входной xlsx (No_, Description, Blocked)")
+    parser.add_argument("--input", default="data.xlsx", help="входной xlsx с цепями (колонки из ChainScrapperMapper)")
     parser.add_argument("--out", default="results", help="каталог результатов (по умолчанию results)")
     parser.add_argument("--sites", default="all", help="'all' или список через запятую")
     parser.add_argument("--limit", type=int, default=0, help="строк на площадку, 0 — все")
@@ -262,7 +261,12 @@ def main(argv: list[str] | None = None) -> int:
             print(name)
         return 0
 
-    df = read_input(args.input)
+    # Модель данных задаётся маппером: его `DIMENSIONS`, `COLUMN_TITLES` и
+    # `score` использует и разбор входа, и сборка результатов. Для другого
+    # товара здесь достаточно подставить другой маппер.
+    mapper = ChainScrapperMapper()
+
+    df = read_input(args.input, mapper)
     raw_dir = Path(args.out) / "raw"
     logs_dir = Path(args.out) / "logs"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -279,11 +283,8 @@ def main(argv: list[str] | None = None) -> int:
         workers = args.workers if args.workers > 0 else len(sites)
         workers = max(1, min(workers, len(sites)))
 
-        # Мэппинг поисковых вариантов читается из xlsx при первом обращении:
-        # грузим его здесь, чтобы потоки не читали файл одновременно.
-        get_name_variants("")
         # Входной xlsx разбираем один раз в главном потоке: дальше df не нужен.
-        rows = prepare_inputs(df)
+        rows = prepare_inputs(df, mapper)
         goal = min(args.limit, len(rows)) if args.limit else len(rows)
 
         # Тихий режим: болтливые print скраперов уходят в logs/<site>.log,
@@ -369,13 +370,13 @@ def main(argv: list[str] | None = None) -> int:
                 if router_installed:
                     progress.uninstall_router()
 
-    stats = assemble(args.input, raw_dir, args.out)
+    stats = assemble(args.input, raw_dir, args.out, mapper)
 
     print("\nГотово:")
     print(f"  обработано строк:       {stats['input_rows']}")
     print(f"  найдено кандидатов:     {stats['candidates']}")
     print(f"  отброшено по сходству:  {stats['rejected_low_similarity']}")
-    print(f"  без размеров (d/D/B=0): {stats['rejected_no_dimensions']}")
+    print(f"  без характеристик (0):  {stats['rejected_no_dimensions']}")
     print(f"  processed:              {stats['processed']}  -> {stats['processed_path']}")
     print(f"  unprocessed:            {stats['unprocessed']}  -> {stats['unprocessed_path']}")
     if logs_used:

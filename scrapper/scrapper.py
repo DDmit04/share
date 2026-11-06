@@ -5,9 +5,9 @@ from typing import Generator, TypeVar
 import pandas as pd
 from bs4 import Tag
 
-from net import configure_proxies
-from model import EntityData
-from scrapper_mapper import ScrapperMapper
+from scrapper.model import EntityData
+from scrapper.scrapper_mapper import ScrapperMapper
+from utils.net import configure_proxies
 
 TEntity = TypeVar('TEntity', bound=EntityData)
 
@@ -37,12 +37,12 @@ class Scrapper[TEntity](ABC):
         i = 0
         for index, table_item in df.iterrows():
             i += 1
-            new_bearing = self.mapper.from_row(table_item)
-            scrapped = self.scrap(new_bearing)
+            new_entity = self.mapper.from_row(table_item)
+            scrapped = self.scrap(new_entity)
             if scrapped is not None:
                 processed.append(scrapped)
             else:
-                unprocessed.append(new_bearing)
+                unprocessed.append(new_entity)
 
             if batch_size is not None and batch_size % i == 0:
                 yield processed, unprocessed
@@ -51,7 +51,7 @@ class Scrapper[TEntity](ABC):
         raise StopIteration()
 
     def scrap(self, new_entity: TEntity) -> TEntity | None:
-        print(f'Поиск: {new_entity['description']}')
+        print(f'Поиск: {new_entity['link']}')
         variants = self.mapper.get_name_variants(new_entity)
         print(f'Варианты {variants}')
         for name_inv in variants:
@@ -62,6 +62,10 @@ class Scrapper[TEntity](ABC):
             try:
                 res = self.scrap_by_url(new_entity, url)
                 if res is not None:
+                    # Характеристики уже собраны, сходство записано в `scrap_list`,
+                    # поэтому очки считаем прямо здесь и кладём в запись: в
+                    # чекпоинт попадает готовая запись, сборка их не пересчитывает.
+                    res['score'] = round(self.mapper.score(res), 4)
                     return res
             except Exception as e:
                 self.errors += 1
@@ -72,7 +76,7 @@ class Scrapper[TEntity](ABC):
     def scrap_data(self, entity_data: TEntity, url: str) -> TEntity | None:
         pass
 
-    def scrap_list(self, entity_data: TEntity, bearing_list: Tag) -> TEntity | None:
+    def scrap_list(self, entity_data: TEntity, found: Tag) -> TEntity | None:
         pass
 
     def scrap_by_url(self, entity_data: TEntity, url: str) -> TEntity | None:

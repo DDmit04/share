@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import os
 
+import urllib3
+
 DEFAULT_PROXY = "http://172.31.24.36:8090"
 
 
 def configure_proxies(proxy: str = DEFAULT_PROXY) -> None:
-    """Выставляет HTTP_PROXY/HTTPS_PROXY, если они не заданы в окружении."""
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
         if not os.environ.get(name):
             os.environ[name] = proxy

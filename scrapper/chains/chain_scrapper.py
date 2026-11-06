@@ -1,5 +1,5 @@
-from scrapper.chains.mapper import ChainScrapperMapper
-from scrapper.chains.model import ChainData
+from scrapper.chains.data.chain_mapper import ChainScrapperMapper
+from scrapper.chains.data.chain_model import ChainData
 from scrapper.scrapper import Scrapper
 
 
